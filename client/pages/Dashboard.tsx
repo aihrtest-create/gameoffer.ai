@@ -32,7 +32,7 @@ function generateCoverLetter(job: string, resume: string) {
     .slice(0, 5);
 
   const bullets = strengths
-    .map((s) => `• ${s.replace(/^\p{P}+/u, "")}`)
+    .map((s) => `• ${s.replace(/^\W+/, "")}`)
     .join("\n");
 
   return (
@@ -102,7 +102,7 @@ export default function Dashboard() {
             <CardDescription>Письмо появится ниже. Можно копировать или перегенерировать.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Textarea value={letter} onChange={(e) => setLetter(e.target.value)} className="min-h-48 rounded-2xl bg-secondary/50" placeholder="Нажмите \"Сгенерировать\"" />
+            <Textarea value={letter} onChange={(e) => setLetter(e.target.value)} className="min-h-48 rounded-2xl bg-secondary/50" placeholder={'Нажмите "Сгенерировать"'} />
             <div className="flex flex-wrap gap-2">
               <Button className="rounded-full" onClick={() => setLetter(generateCoverLetter(job, resume))}>Сгенерировать</Button>
               <Button variant="secondary" className="rounded-full" onClick={() => setLetter(generateCoverLetter(job + "\n" + Date.now(), resume))}>Перегенерировать ♻️</Button>
@@ -120,7 +120,7 @@ export default function Dashboard() {
         <CardContent className="space-y-4">
           <div className="rounded-2xl border bg-white p-4 text-sm leading-6 text-muted-foreground">{job ? job : "Нет данных о вакансии. Вернитесь на главную, чтобы загрузить описание."}</div>
           <Separator />
-          <div className="text-xs text-muted-foreground">Совет: добавьте ссылку или ключев��е требования, чтобы вопросы интервью были точнее.</div>
+          <div className="text-xs text-muted-foreground">Совет: добавьте ссылку или ключевые требования, чтобы вопросы интервью были точнее.</div>
         </CardContent>
       </Card>
     </div>
@@ -134,7 +134,6 @@ function InterviewPanel({ job }: { job: string }) {
   const [input, setInput] = useState("");
   const [listening, setListening] = useState(false);
 
-  // Speech Synthesis for AI voice
   const speak = (text: string) => {
     try {
       const utter = new SpeechSynthesisUtterance(text);
@@ -145,13 +144,11 @@ function InterviewPanel({ job }: { job: string }) {
   };
 
   useEffect(() => {
-    // Speak last AI message
     const last = messages[messages.length - 1];
     if (last?.role === "ai") speak(last.text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length]);
 
-  // Optional Speech Recognition (if supported)
   useEffect(() => {
     if (!listening) return;
     // @ts-ignore
