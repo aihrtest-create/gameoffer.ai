@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 
 function readLS(key: string) {
   try {
@@ -44,11 +43,33 @@ function generateCoverLetter(job: string, resume: string) {
   );
 }
 
+// Sessions history
+export type Training = { id: string; ts: number; title: string; turns: number; preview: string };
+function readHistory(): Training[] {
+  try {
+    return JSON.parse(localStorage.getItem("interview.history") || "[]");
+  } catch {
+    return [];
+  }
+}
+function addHistory(s: Training) {
+  try {
+    const arr = readHistory();
+    arr.unshift(s);
+    localStorage.setItem("interview.history", JSON.stringify(arr.slice(0, 50)));
+  } catch {}
+}
+function deriveTitle(job: string) {
+  const roleMatch = job.match(/(?:на|позицию|роль)\s+([A-Za-zА-Яа-я0-9\-\s"']{2,})/i);
+  return roleMatch?.[1]?.trim() || "Тренировка";
+}
+
 export default function Dashboard() {
   const [job, setJob] = useState("");
   const [resume, setResume] = useState("");
   const [letter, setLetter] = useState("");
   const [open, setOpen] = useState(false);
+  const [history, setHistory] = useState<Training[]>(readHistory());
 
   useEffect(() => {
     const j = readLS("interview.job");
@@ -82,16 +103,25 @@ export default function Dashboard() {
               </DialogTrigger>
               <DialogContent className="max-w-3xl">
                 <DialogHeader>
-                  <DialogTitle>Тренировка интервью 🎤</DialogTitle>
+                  <DialogTitle className="sr-only">Тренировка интервью</DialogTitle>
                 </DialogHeader>
-                <InterviewPanel job={job} />
+                <InterviewPanel
+                  job={job}
+                  onFinish={(session) => {
+                    addHistory(session);
+                    setHistory(readHistory());
+                    setOpen(false);
+                  }}
+                />
               </DialogContent>
             </Dialog>
-            <Button variant="outline" onClick={() => {
-              writeLS("interview.job", "");
-              writeLS("interview.resume", "");
-              location.href = "/";
-            }}
+            <Button
+              variant="outline"
+              onClick={() => {
+                writeLS("interview.job", "");
+                writeLS("interview.resume", "");
+                location.href = "/";
+              }}
             >Изменить вакансию</Button>
           </CardContent>
         </Card>
@@ -104,8 +134,12 @@ export default function Dashboard() {
           <CardContent className="space-y-3">
             <Textarea value={letter} onChange={(e) => setLetter(e.target.value)} className="min-h-48 rounded-2xl bg-secondary/50" placeholder={'Нажмите "Сгенерировать"'} />
             <div className="flex flex-wrap gap-2">
-              <Button className="rounded-full" onClick={() => setLetter(generateCoverLetter(job, resume))}>Сгенерировать</Button>
-              <Button variant="secondary" className="rounded-full" onClick={() => setLetter(generateCoverLetter(job + "\n" + Date.now(), resume))}>Перегенерировать ♻️</Button>
+              <Button
+                className="rounded-full"
+                onClick={() => setLetter(letter.trim() ? generateCoverLetter(job + "\n" + Date.now(), resume) : generateCoverLetter(job, resume))}
+              >
+                {letter.trim() ? "Перегенерировать ♻️" : "Сгенерировать"}
+              </Button>
               <Button variant="outline" className="rounded-full" onClick={() => { navigator.clipboard.writeText(letter); }}>Копировать 📋</Button>
             </div>
           </CardContent>
@@ -114,20 +148,32 @@ export default function Dashboard() {
 
       <Card className="shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
         <CardHeader>
-          <CardTitle>Ваша вакансия</CardTitle>
-          <CardDescription>Текст вакансии сохранён локально и не отправляется на сервер.</CardDescription>
+          <CardTitle>История тренировок</CardTitle>
+          <CardDescription>Завершённые тренировки сохраняются локально на этом устройстве.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="rounded-2xl border bg-white p-4 text-sm leading-6 text-muted-foreground">{job ? job : "Нет данных о вакансии. Вернитесь на главную, чтобы загрузить описание."}</div>
-          <Separator />
-          <div className="text-xs text-muted-foreground">Совет: добавьте ссылку или ключевые требования, чтобы вопросы интервью были точнее.</div>
+          {history.length === 0 ? (
+            <div className="rounded-2xl border bg-white p-4 text-sm text-muted-foreground">Пока пусто. Завершите тренировку, чтобы она появилась здесь.</div>
+          ) : (
+            <ul className="space-y-2">
+              {history.map((s) => (
+                <li key={s.id} className="flex items-center justify-between rounded-xl border bg-white px-4 py-3 text-sm">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{s.title}</div>
+                    <div className="truncate text-muted-foreground">{new Date(s.ts).toLocaleString()} • {s.turns} сообщений</div>
+                  </div>
+                  <Button variant="ghost" className="rounded-full">Открыть</Button>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function InterviewPanel({ job }: { job: string }) {
+function InterviewPanel({ job, onFinish }: { job: string; onFinish: (s: Training) => void }) {
   const [messages, setMessages] = useState<{ role: "ai" | "user"; text: string }[]>([
     { role: "ai", text: "Привет! Давай потренируемся. Расскажи кратко о себе." },
   ]);
@@ -182,27 +228,34 @@ function InterviewPanel({ job }: { job: string }) {
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-2xl border bg-white p-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-medium">📝 Стенограмма</div>
-        <div className="h-64 overflow-y-auto space-y-2 text-sm">
-          {messages.map((m, i) => (
-            <div key={i} className={m.role === "ai" ? "text-foreground" : "text-muted-foreground"}>
-              <span className="mr-2 font-semibold">{m.role === "ai" ? "AI" : "Вы"}:</span>
+    <div className="flex h-[70vh] flex-col">
+      <div className="flex items-center justify-between border-b px-2 py-1 text-sm text-muted-foreground">
+        <div className="truncate">{deriveTitle(job)} • Тренировка</div>
+        <Button
+          variant="ghost"
+          className="rounded-full"
+          onClick={() => onFinish({
+            id: crypto.randomUUID(),
+            ts: Date.now(),
+            title: deriveTitle(job),
+            turns: messages.length,
+            preview: messages[messages.length - 1]?.text || "",
+          })}
+        >Завершить ✅</Button>
+      </div>
+      <div className="flex-1 overflow-y-auto space-y-3 p-3">
+        {messages.map((m, i) => (
+          <div key={i} className={m.role === "ai" ? "flex" : "flex justify-end"}>
+            <div className={m.role === "ai" ? "max-w-[80%] rounded-2xl border bg-white px-4 py-2" : "max-w-[80%] rounded-2xl bg-black px-4 py-2 text-white"}>
               {m.text}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-      <div className="rounded-2xl border bg-white p-4">
-        <div className="mb-2 flex items-center gap-2 text-sm font-medium">🤖 Помощник</div>
-        <div className="text-sm text-muted-foreground mb-3">Нажмите микрофон и отвечайте голосом или введите текст вручную.</div>
-        <div className="flex flex-wrap gap-2 mb-3">
-          <Button className="rounded-full" onClick={() => setListening((v) => !v)}>{listening ? "Остановить 🎙️" : "Микрофон 🎙️"}</Button>
-          <Button variant="outline" className="rounded-full" onClick={() => setMessages([{ role: "ai", text: "Начнём заново. Расскажите о проекте, которым гордитесь." }])}>Сбросить ↺</Button>
-        </div>
+      <div className="border-t p-2">
         <div className="flex gap-2">
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ваш ответ..." className="flex-1 rounded-full border px-4 py-2" />
+          <Button variant="outline" className="rounded-full" onClick={() => setListening((v) => !v)}>{listening ? "Остановить 🎙️" : "Микрофон 🎙️"}</Button>
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Напишите сообщение..." className="flex-1 rounded-full border px-4 py-2" />
           <Button className="rounded-full" onClick={() => submit(input)}>Отправить →</Button>
         </div>
       </div>
