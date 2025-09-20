@@ -23,6 +23,7 @@ const App = () => (
       <main className="mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6">
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/resume" element={<Resume />} />
           <Route path="/dashboard" element={<Dashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
